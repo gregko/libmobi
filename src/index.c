@@ -7,6 +7,15 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+ *
+ * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
+ * changed variable length arrays to alloca() calls, added convert to EPUB module
+ * and command line option.
+ *
+ * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
+ * changed variable length arrays to alloca() calls, added convert to EPUB module
+ * and command line option. Renamed partXXXX.ncx and .opf to more standard
+ * toc.ncx and content.opf.
  */
 
 #define _GNU_SOURCE 1
@@ -17,7 +26,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-
 #include "index.h"
 #include "util.h"
 #include "memory.h"
@@ -261,7 +269,7 @@ size_t mobi_getstring_ordt(const MOBIOrdt *ordt, MOBIBuffer *buf, unsigned char 
             if (codepoint == uni_replacement) {
                 /* rewind buffer to codepoint2 */
                 debug_print("Invalid ligature sequence%s", "\n");
-                buffer_seek(buf, (int) -k);
+                buffer_seek(buf,  -(int)k);
             } else {
                 i += k;
             }
@@ -277,7 +285,7 @@ size_t mobi_getstring_ordt(const MOBIOrdt *ordt, MOBIBuffer *buf, unsigned char 
                 /* illegal unpaired high surrogate */
                 /* rewind buffer to codepoint2 */
                 debug_print("Invalid code point: %u\n", codepoint);
-                buffer_seek(buf, (int) -k);
+                buffer_seek(buf,  -(int)k);
                 codepoint = uni_replacement;
             }
         }
@@ -372,7 +380,7 @@ static MOBI_RET mobi_parse_index_entry(MOBIIndx *indx, const MOBIIdxt idxt, cons
             uint32_t value_count;
             uint32_t value_bytes;
         } MOBIPtagx;
-        MOBIPtagx ptagx[tagx->tags_count];
+        MOBIPtagx *ptagx = _ALLOCA(tagx->tags_count * sizeof(MOBIPtagx));
         uint32_t ptagx_count = 0;
         size_t len;
         size_t i = 0;
@@ -584,7 +592,7 @@ MOBI_RET mobi_parse_indx(const MOBIPdbRecord *indx_record, MOBIIndx *indx, MOBIT
     }
     buffer_setpos(buf, idxt_offset);
     MOBIIdxt idxt;
-    uint32_t offsets[entries_count + 1];
+    uint32_t *offsets = _ALLOCA((entries_count + 1) * sizeof(uint32_t) );
     idxt.offsets = offsets;
     ret = mobi_parse_idxt(buf, &idxt, entries_count);
     if (ret != MOBI_SUCCESS) {

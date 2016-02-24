@@ -10,18 +10,25 @@
  *
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+ *
+ * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
+ * changed variable length arrays to alloca() calls, added convert to EPUB module
+ * and command line option.
  */
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
+#ifndef _WIN32
+# include <unistd.h>
+#endif
 #include <ctype.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <errno.h>
 /* include libmobi header */
 #include <mobi.h>
+#include "save_epub.h"
 #ifdef HAVE_CONFIG_H
 # include "../config.h"
 #endif
@@ -75,6 +82,7 @@ int print_rec_meta_opt = 0;
 int dump_rec_opt = 0;
 int parse_kf7_opt = 0;
 int dump_parts_opt = 0;
+int dump_epub_opt = 0;
 int print_rusage_opt = 0;
 int outdir_opt = 0;
 #ifdef USE_ENCRYPTION
@@ -83,8 +91,9 @@ int setpid_opt = 0;
 
 /* options values */
 char outdir[FILENAME_MAX];
+char* epub_fn = outdir;
 #ifdef USE_ENCRYPTION
-char *pid;
+char *pid = NULL;
 #endif
 
 #ifdef _WIN32
@@ -153,7 +162,7 @@ void print_meta(const MOBIData *m) {
     /* Full name stored at offset given in MOBI header */
     if (m->mh && m->mh->full_name_offset && m->mh->full_name_length) {
         size_t len = *m->mh->full_name_length;
-        char full_name[len + 1];
+        char *full_name = _ALLOCA(len + 1);
         if(mobi_get_fullname(m, full_name, len) == MOBI_SUCCESS) {
             printf("\nFull name: %s\n", full_name);
         }
@@ -297,7 +306,7 @@ void print_exth(const MOBIData *m) {
         if (tag.tag == 0) {
             /* unknown tag */
             /* try to print the record both as string and numeric value */
-            char str[curr->size + 1];
+            char *str = _ALLOCA(curr->size + 1);
             unsigned i = 0;
             unsigned char *p = curr->data;
             while (i < curr->size && isprint(*p)) {
@@ -311,7 +320,7 @@ void print_exth(const MOBIData *m) {
             /* known tag */
             unsigned i = 0;
             size_t size = curr->size;
-            char str[2 * size + 1];
+            char *str = _ALLOCA(2 * size + 1);
             unsigned char *data = curr->data;
             switch (tag.type) {
                 /* numeric */
@@ -526,7 +535,13 @@ int dump_rawml_parts(const MOBIRawml *rawml, const char *fullpath) {
         while (curr != NULL) {
             MOBIFileMeta file_meta = mobi_get_filemeta_by_type(curr->type);
             if (curr->size > 0) {
-                sprintf(partname, "%s%cresource%05zu.%s", newdir, separator, curr->uid, file_meta.extension);
+				if (file_meta.type == T_NCX)
+					sprintf(partname, "%s%ctoc.%s", newdir, separator, file_meta.extension);
+				else if (file_meta.type == T_OPF) {
+					sprintf(partname, "%s%ccontent.%s", newdir, separator, file_meta.extension);
+				}
+				else
+					sprintf(partname, "%s%cresource%05zu.%s", newdir, separator, curr->uid, file_meta.extension);
                 errno = 0;
                 FILE *file = fopen(partname, "wb");
                 if (file == NULL) {
@@ -650,7 +665,7 @@ int loadfilename(const char *fullpath) {
         }
         /* Free MOBIRawml structure */
         mobi_free_rawml(rawml);
-    }
+	}
     /* Free MOBIData structure */
     mobi_free(m);
     return ret;
@@ -661,9 +676,10 @@ int loadfilename(const char *fullpath) {
  @param[in] progname Executed program name
  */
 void usage(const char *progname) {
-    printf("usage: %s [-dmrs" PRINT_RUSAGE_ARG "v7] [-o dir]" PRINT_ENC_USG " filename\n", progname);
+    printf("usage: %s [-edmrs" PRINT_RUSAGE_ARG "v7] [-o dir]" PRINT_ENC_USG " filename\n", progname);
     printf("       without arguments prints document metadata and exits\n");
-    printf("       -d      dump rawml text record\n");
+	printf("       -e fn   convert to EPUB under file name fn (other dump/print options ignored)\n");
+	printf("       -d      dump rawml text record\n");
     printf("       -m      print records metadata\n");
     printf("       -o dir  save output to dir folder\n");
 #ifdef USE_ENCRYPTION
@@ -678,6 +694,87 @@ void usage(const char *progname) {
     printf("       -7      parse KF7 part of hybrid file (by default KF8 part is parsed)\n");
     exit(0);
 }
+
+#ifdef _WIN32
+
+static int     opterr = 1,             /* if error message should be printed */
+optind = 1,             /* index into parent argv vector */
+optopt,                 /* character checked for validity */
+optreset;               /* reset getopt */
+char  *optarg;          /* argument associated with option */
+
+#define BADCH   (int)'?'
+#define BADARG  (int)':'
+#define EMSG    ""
+
+/*
+* getopt --
+*      Parse argc/argv argument vector.
+*/
+int
+getopt(
+	int nargc,
+	char * const *nargv,
+	const char *ostr)
+{
+	const char *__progname = "mobitool";
+	static char *place = EMSG;              /* option letter processing */
+	char *oli;                              /* option letter list index */
+
+	if (optreset || !*place) {              /* update scanning pointer */
+		optreset = 0;
+		if (optind >= nargc || *(place = nargv[optind]) != '-') {
+			place = EMSG;
+			return (EOF);
+		}
+		if (place[1] && *++place == '-') {      /* found "--" */
+			++optind;
+			place = EMSG;
+			return (EOF);
+		}
+	}                                       /* option letter okay? */
+	if ((optopt = (int)*place++) == (int)':' ||
+		!(oli = strchr(ostr, optopt))) {
+		/*
+		* if the user didn't specify '-' as an option,
+		* assume it means EOF.
+		*/
+		if (optopt == (int)'-')
+			return (EOF);
+		if (!*place)
+			++optind;
+		if (opterr && *ostr != ':')
+			(void)fprintf(stderr,
+				"%s: illegal option -- %c\n", __progname, optopt);
+		return (BADCH);
+	}
+	if (*++oli != ':') {                    /* don't need argument */
+		optarg = NULL;
+		if (!*place)
+			++optind;
+	}
+	else {                                  /* need an argument */
+		if (*place)                     /* no white space */
+			optarg = place;
+		else if (nargc <= ++optind) {   /* no arg */
+			place = EMSG;
+			if (*ostr == ':')
+				return (BADARG);
+			if (opterr)
+				(void)fprintf(stderr,
+					"%s: option requires an argument -- %c\n",
+					__progname, optopt);
+			return (BADCH);
+		}
+		else                            /* white space */
+			optarg = nargv[optind];
+		place = EMSG;
+		++optind;
+	}
+	return (optopt);                        /* dump back option letter */
+}
+#endif
+
 /**
  @brief Main
  */
@@ -685,9 +782,9 @@ int main(int argc, char *argv[]) {
     if (argc < 2) {
         usage(argv[0]);
     }
-    opterr = 0;
+    int opterr = 0;
     int c;
-    while((c = getopt(argc, argv, "dmo:" PRINT_ENC_ARG "rs" PRINT_RUSAGE_ARG "v7")) != -1)
+    while((c = getopt(argc, argv, "e:dmo:" PRINT_ENC_ARG "rs" PRINT_RUSAGE_ARG "v7")) != -1)
         switch(c) {
             case 'd':
                 dump_rawml_opt = 1;
@@ -729,6 +826,15 @@ int main(int argc, char *argv[]) {
             case 's':
                 dump_parts_opt = 1;
                 break;
+			case 'e':
+				dump_epub_opt = 1;
+				size_t fn_length = strlen(optarg);
+				if (fn_length >= FILENAME_MAX - 1) {
+					printf("EPUB file name too long\n");
+					return ERROR;
+				}
+				strncpy(epub_fn, optarg, FILENAME_MAX - 1);
+				break;
 #ifdef HAVE_SYS_RESOURCE_H
             case 'u':
                 print_rusage_opt = 1;
@@ -765,7 +871,13 @@ int main(int argc, char *argv[]) {
     int ret = 0;
     char filename[FILENAME_MAX];
     strncpy(filename, argv[optind], FILENAME_MAX - 1);
-    ret = loadfilename(filename);
+	
+	if (dump_epub_opt) {
+		ret = convertMobiToEpub(filename, epub_fn, pid, parse_kf7_opt == 1) ? 1 : 0;
+	}
+	else {
+		ret = loadfilename(filename);
+	}
 #ifdef HAVE_SYS_RESOURCE_H
     if (print_rusage_opt) {
         /* rusage */

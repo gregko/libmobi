@@ -1022,7 +1022,7 @@ MOBI_RET mobi_build_opf_metadata(OPF *opf,  const MOBIData *m, const MOBIRawml *
         }
         if (m->mh && m->mh->full_name_offset && m->mh->full_name_length) {
             size_t len = *m->mh->full_name_length;
-            char full_name[len + 1];
+            char *full_name = _ALLOCA(len + 1);
             mobi_get_fullname(m, full_name, len);
             opf->metadata->dc_meta->title[0] = strdup(full_name);
         } else if (m->ph && strlen(m->ph->name) > 0) {
@@ -1273,7 +1273,7 @@ MOBI_RET mobi_xml_write_spine(xmlTextWriterPtr writer, const MOBIRawml *rawml) {
         curr = curr->next;
     }
     if (curr) {
-        sprintf(ncxid, "resource%05zu", curr->uid);
+        sprintf(ncxid, "toc");
     } else {
         return MOBI_DATA_CORRUPT;
     }
@@ -1357,10 +1357,24 @@ MOBI_RET mobi_xml_write_manifest(xmlTextWriterPtr writer, const MOBIRawml *rawml
     }
     if (rawml->resources != NULL) {
         MOBIPart *curr = rawml->resources;
+		bool hasToc = false;
+		bool hasContent = false;
         while (curr != NULL) {
             MOBIFileMeta file_meta = mobi_get_filemeta_by_type(curr->type);
-            sprintf(href, "resource%05zu.%s", curr->uid, file_meta.extension);
-            sprintf(id, "resource%05zu", curr->uid);
+			if (file_meta.type == T_NCX && !hasToc) {
+				sprintf(href, "toc.%s", file_meta.extension);
+				sprintf(id, "toc");
+				hasToc = true;
+			}
+			else if (file_meta.type == T_OPF && !hasContent) {
+				sprintf(href, "content.%s", file_meta.extension);
+				sprintf(id, "content");
+				hasContent = true;
+			}
+			else {
+				sprintf(href, "resource%05zu.%s", curr->uid, file_meta.extension);
+				sprintf(id, "resource%05zu", curr->uid);
+			}
             MOBI_RET ret = mobi_xml_write_item(writer, id, href, file_meta.mime_type);
             if (ret != MOBI_SUCCESS) {
                 return ret;

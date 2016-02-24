@@ -7,6 +7,8 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+ * Modified by G. Kochaniak Feb. 2016 - using alloca()
+ * instead of variable length arrays.
  */
 
 #define _GNU_SOURCE 1
@@ -487,7 +489,7 @@ size_t mobi_get_locale_number(const char *locale_string) {
             lang_code++;
             continue;
         }
-        char lower_locale[strlen(locale_string) + 1];
+        char *lower_locale = _ALLOCA(strlen(locale_string) + 1);
         int i = 0;
         while (locale_string[i]) {
             lower_locale[i] = (char) tolower(locale_string[i]);
@@ -969,7 +971,7 @@ char * mobi_decode_exthstring(const MOBIData *m, const unsigned char *data, cons
     }
     size_t out_length = 3 * size + 1;
     size_t in_length = size;
-    char string[out_length];
+    char *string = _ALLOCA(out_length);
     if (mobi_is_cp1252(m)) {
         MOBI_RET ret = mobi_cp1252_to_utf8(string, (const char *) data, &out_length, in_length);
         if (ret != MOBI_SUCCESS) {

@@ -7,6 +7,14 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+  *
+ * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
+ * changed variable length arrays to alloca() calls, added convert to EPUB module
+ * and command line option.
+ *
+ * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
+ * changed variable length arrays to alloca() calls, added convert to EPUB module
+ * and command line option.
  */
 
 #define _GNU_SOURCE 1
@@ -212,7 +220,7 @@ MOBI_RET mobi_find_attrname(MOBIResult *result, const unsigned char *data_start,
         return MOBI_PARAM_ERR;
     }
     size_t needle_length = strlen(attrname);
-    char needle[needle_length + 2];
+    char *needle = _ALLOCA(needle_length + 2);
     strcpy(needle, attrname);
     strcat(needle, "=");
     needle_length++;
@@ -901,7 +909,7 @@ MOBI_RET mobi_reconstruct_parts(MOBIRawml *rawml) {
                 insert_position = skel_length;
             }
             size_t skel_end_length = skel_length - insert_position;
-            char skel_text_end[skel_end_length + 1];
+            char *skel_text_end = _ALLOCA(skel_end_length + 1);
             strncpy(skel_text_end, skel_text + insert_position, skel_end_length);
             skel_text_end[skel_end_length] = '\0';
             skel_text[insert_position] = '\0';
@@ -946,12 +954,13 @@ MOBI_RET mobi_get_filepos_array(MOBIArray *links, const MOBIPart *part) {
     size_t offset = 0;
     size_t size = part->size;
     unsigned char *data = part->data;
-    while (true) {
-        char val[MOBI_ATTRVALUE_MAXSIZE];
+	char val[MOBI_ATTRVALUE_MAXSIZE];
+	while (true) {
         size -= offset;
         data += offset;
         offset = mobi_get_attribute_value(val, data, size, "filepos", false);
-        if (offset == SIZE_MAX) { break; }
+		if (offset == SIZE_MAX)
+			break;
         size_t filepos = strtoul(val, NULL, 10);
         if (filepos > UINT32_MAX || filepos == 0) {
             debug_print("Filepos out of range: %zu\n", filepos);

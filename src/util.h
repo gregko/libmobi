@@ -6,6 +6,8 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+ *
+ * Modified by G. Kochaniak Feb. 2016 (const qualifier added)
  */
 
 #ifndef libmobi_util_h
@@ -110,11 +112,13 @@
 #define RAWTEXT_SIZEMAX 0xfffffff
 /** @} */
 
+#ifndef max
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
-int mobi_bitcount(uint8_t byte);
-MOBI_RET mobi_delete_record_by_seqnumber(MOBIData *m, size_t num);
+int mobi_bitcount(const uint8_t byte);
+MOBI_RET mobi_delete_record_by_seqnumber(MOBIData *m, const size_t num);
 MOBI_RET mobi_swap_mobidata(MOBIData *m);
 char * mobi_strdup(const char *s);
 bool mobi_is_cp1252(const MOBIData *m);

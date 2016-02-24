@@ -6,6 +6,10 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+ *
+ * Modified slightly by Grzegorz Kochaniak (gregko@hyperionics.com)
+ * in Feb. 2016 - corrected 'char *' vs. 'const char *'
+ * inconsistencies between the source code and the declarations here.
  */
 
 #ifndef mobi_index_h
@@ -124,6 +128,6 @@ char * mobi_get_cncx_string_flat(const MOBIPdbRecord *cncx_record, const uint32_
 MOBI_RET mobi_decode_infl(unsigned char *decoded, int *decoded_size, const unsigned char *rule);
 MOBI_RET mobi_decode_infl_old(const MOBIIndx *indx);
 MOBI_RET mobi_trie_insert_infl(MOBITrie **root, const MOBIIndx *indx, size_t i);
-size_t mobi_trie_get_inflgroups(char **infl_strings, MOBITrie *root, const char *string);
+size_t mobi_trie_get_inflgroups(char **infl_strings, MOBITrie * const root, const char *string);
 
 #endif

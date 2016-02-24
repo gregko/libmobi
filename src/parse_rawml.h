@@ -6,6 +6,8 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
+ *
+ * G. Kochaniak - increased MOBI_ATTRVALUE_MAXSIZE from 100 to 512
  */
 
 #ifndef mobi_parse_rawml_h
@@ -15,7 +17,7 @@
 #include "mobi.h"
 
 #define MOBI_ATTRNAME_MAXSIZE 100 /**< Maximum length of tag attribute name, like "href" */
-#define MOBI_ATTRVALUE_MAXSIZE 100 /**< Maximum length of tag attribute value */
+#define MOBI_ATTRVALUE_MAXSIZE 512 /**< Maximum length of tag attribute value */
 
 /**
  @brief Result data returned by mobi_search_links_kf7() and mobi_search_links_kf8()
