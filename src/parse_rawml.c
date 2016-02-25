@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 #include "parse_rawml.h"
 #include "util.h"
 #include "opf.h"
