@@ -7,10 +7,6 @@
  * This file is part of libmobi.
  * Licensed under LGPL, either version 3, or any later.
  * See <http://www.gnu.org/licenses/>
-  *
- * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
- * changed variable length arrays to alloca() calls, added convert to EPUB module
- * and command line option.
  *
  * Modified slightly by Grzegorz Kochaniak, greg@hyperionics.com, in Feb. 2016 -
  * changed variable length arrays to alloca() calls, added convert to EPUB module
