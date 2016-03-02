@@ -14,6 +14,18 @@
 // unzip101e headers
 #include <zip.h>
 
+#define WANT_TIDY_CLEANUP
+#ifdef WANT_TIDY_CLEANUP
+	typedef unsigned long ulong;
+#   include "tidy.h"
+#   include "tidybuffio.h"
+
+	static void TIDY_CALL emptyPutByteFunc(void* sinkData, byte bt)
+	{
+		// printf("In emptyPutByteFunc()\n");
+	}
+#endif
+
 /* return codes */
 #define ERROR 1
 #define SUCCESS 0
@@ -84,7 +96,7 @@ int epub_rawml_parts(const MOBIRawml *rawml, const char *epub_fn) {
 	// mimetype :
 	static const char contents[] = "application/epub+zip";
 	noError = startFileInZip(zf, "mimetype", false);
-	noError &= zipWriteInFileInZip(zf, contents, sizeof(contents)) == ZIP_OK;
+	noError &= zipWriteInFileInZip(zf, contents, sizeof(contents)-1) == ZIP_OK; // Must strip ending 0 byte, hence -1
 	noError &= zipCloseFileInZip(zf) == ZIP_OK;
 	if (!noError)
 	{
@@ -102,7 +114,7 @@ int epub_rawml_parts(const MOBIRawml *rawml, const char *epub_fn) {
 		"  </rootfiles>\n"
 		"</container>";
 	noError = startFileInZip(zf, "META-INF/container.xml", true);
-	noError &= zipWriteInFileInZip(zf, cont_xml, sizeof(cont_xml)) == ZIP_OK;
+	noError &= zipWriteInFileInZip(zf, cont_xml, sizeof(cont_xml)-1) == ZIP_OK; // again -1 to strip ending 0
 	noError &= zipCloseFileInZip(zf) == ZIP_OK;
 	if (!noError)
 	{
@@ -121,7 +133,33 @@ int epub_rawml_parts(const MOBIRawml *rawml, const char *epub_fn) {
 			MOBIFileMeta file_meta = mobi_get_filemeta_by_type(curr->type);
 			sprintf(partname, "OEBPS/part%05zu.%s", curr->uid, file_meta.extension);
 			noError = startFileInZip(zf, partname, true);
+#ifdef WANT_TIDY_CLEANUP
+			TidyBuffer tdBuf;
+			tidyBufInit(&tdBuf);
+			tidyBufAttach(&tdBuf, curr->data, curr->size);
+
+			TidyDoc tdoc = tidyCreate();
+			// What about input encoding? Do we get utf8 from mobi?
+			tidySetOutCharEncoding(tdoc, "utf8");
+			tidyOptSetBool(tdoc, TidyQuiet, yes);
+			tidyOptSetBool(tdoc, TidyMark, no);
+			tidyOptSetInt(tdoc, TidyWrapLen, 0);
+			tidyOptSetBool(tdoc, TidyForceOutput, true);
+			// Shut up the errors and warnings output
+			TidyOutputSink errSink;
+			tidyInitSink(&errSink, (void*)1, emptyPutByteFunc); // (void*)1 because does not initialize for NULL.
+			tidySetErrorSink(tdoc, &errSink);
+			tidyParseBuffer(tdoc, &tdBuf); // 2: errors, 1: warnings, 0: OK, see tidyDocStatus()
+			tidyBufDetach(&tdBuf);
+
+			tidyCleanAndRepair(tdoc); // return same as above
+			tidySaveBuffer(tdoc, &tdBuf);
+			tidyRelease(tdoc);
+			noError &= zipWriteInFileInZip(zf, tdBuf.bp, tdBuf.size) == ZIP_OK;
+			tidyBufFree(&tdBuf);
+#else
 			noError &= zipWriteInFileInZip(zf, curr->data, curr->size) == ZIP_OK;
+#endif
 			noError &= zipCloseFileInZip(zf) == ZIP_OK;
 			if (!noError)
 			{
@@ -142,6 +180,23 @@ int epub_rawml_parts(const MOBIRawml *rawml, const char *epub_fn) {
 		while (curr != NULL) {
 			MOBIFileMeta file_meta = mobi_get_filemeta_by_type(curr->type);
 			sprintf(partname, "OEBPS/flow%05zu.%s", curr->uid, file_meta.extension);
+			// optional, get rid of negative text-indent
+			if (file_meta.type == T_CSS) {
+				char *pc = curr->data;
+				while (pc = strstr(pc, "text-indent:")) {
+					pc += 12; // strlen("text-indent:");
+					while (isspace(*pc) && (pc - (char*)curr->data) < curr->size)
+						pc++;
+					if (*pc == '-') {
+						*pc++ = ' ';
+						while (isdigit(*pc)) {
+							*pc++ = ' ';
+						}
+						// now *pc is maybe %, p for px etc.
+						*(--pc) = '0';
+					}
+				}
+			}
 			noError = startFileInZip(zf, partname, true);
 			noError &= zipWriteInFileInZip(zf, curr->data, curr->size) == ZIP_OK;
 			noError &= zipCloseFileInZip(zf) == ZIP_OK;

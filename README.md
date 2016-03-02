@@ -1,11 +1,3 @@
-###gregko fork in Feb. 2015
-
-Added save_epub.h, .c to the library and updated mobitool.c with -e option to export the book to epub format.
-This adds dependency on a very small unzip101e library, in addition to already being dependent on zlib,
-libiconv and libxml2.
-
-Modified to build under Windows with Visual Studio 2015, plus minor bug fixes. Android port pending.
-
 # Libmobi
 
 C library for handling Mobipocket/Kindle (MOBI) ebook format documents.
